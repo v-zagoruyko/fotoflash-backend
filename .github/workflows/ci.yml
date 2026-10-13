@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --frozen
+      - run: uv run ruff format --check .
+      - run: uv run ruff check .
+
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: fotoflash
+          POSTGRES_USER: fotoflash
+          POSTGRES_PASSWORD: fotoflash
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U fotoflash"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+    env:
+      SECRET_KEY: ci-only-not-a-secret
+      DEBUG: "True"
+      DATABASE_URL: postgres://fotoflash:fotoflash@localhost:5432/fotoflash
+      REDIS_URL: redis://localhost:6379/0
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --frozen
+      - name: Migrations are up to date
+        run: uv run python manage.py makemigrations --check --dry-run
+      - name: OpenAPI schema is valid
+        run: uv run python manage.py spectacular --validate --fail-on-warn --file /tmp/schema.yml
+      - name: Tests
+        run: uv run pytest -q

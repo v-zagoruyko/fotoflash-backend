@@ -1,0 +1,28 @@
+# Установка: uvx pre-commit install
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: ^apps/.*/migrations/
+      - id: end-of-file-fixer
+        exclude: ^apps/.*/migrations/
+      - id: check-yaml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: [--maxkb=1024]
+      - id: detect-private-key
+
+  # Ruff запускается из окружения проекта, версия берётся из uv.lock.
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: ruff check
+        entry: uv run --frozen ruff check --force-exclude --fix --exit-non-zero-on-fix
+        language: system
+        types: [python]
+      - id: ruff-format
+        name: ruff format
+        entry: uv run --frozen ruff format --force-exclude
+        language: system
+        types: [python]
