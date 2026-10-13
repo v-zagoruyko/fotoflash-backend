@@ -1,0 +1,83 @@
+# Тестовый стенд на личном VPS: fotoflash.zagoruykov.site. На сервере лежит как docker-compose.yml рядом с .env.
+# Фронтенд (Next.js) того же домена деплоится отдельным compose и забирает всё, что не /api, /admin, /static, /media.
+
+x-app: &app
+  image: ${IMAGE}
+  restart: unless-stopped
+  env_file: .env
+  depends_on: [redis]
+
+services:
+  web:
+    <<: *app
+    command: >
+      sh -c "python manage.py migrate --noinput
+      && python manage.py collectstatic --noinput
+      && exec gunicorn config.wsgi --bind 0.0.0.0:8000 --workers 2 --timeout 60"
+    mem_limit: 256m
+    volumes:
+      - media:/app/media
+      - static:/app/staticfiles
+    networks: [default, proxy, db]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=proxy
+      - traefik.http.routers.fotoflash-api.rule=Host(`fotoflash.zagoruykov.site`) && (PathPrefix(`/api/`) || PathPrefix(`/admin/`) || Path(`/healthz`))
+      - traefik.http.routers.fotoflash-api.priority=100
+      - traefik.http.routers.fotoflash-api.entrypoints=websecure
+      - traefik.http.routers.fotoflash-api.tls.certresolver=le
+      - traefik.http.routers.fotoflash-api.service=fotoflash-api
+      - traefik.http.services.fotoflash-api.loadbalancer.server.port=8000
+
+  # Celery worker со встроенным beat: на 2 ГБ RAM отдельный процесс beat не нужен
+  worker:
+    <<: *app
+    command: celery -A config worker -B -l info -c 1 -s /tmp/celerybeat-schedule
+    mem_limit: 256m
+    volumes:
+      - media:/app/media:ro
+    networks: [default, db]
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --maxmemory 64mb --maxmemory-policy noeviction --appendonly yes
+    mem_limit: 96m
+    volumes:
+      - redis:/data
+    networks: [default]
+
+  # Раздача собранной статики админки и загруженных файлов
+  files:
+    image: nginx:alpine
+    restart: unless-stopped
+    mem_limit: 24m
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - media:/srv/media:ro
+      - static:/srv/static:ro
+    networks: [proxy]
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.fotoflash-files.rule=Host(`fotoflash.zagoruykov.site`) && (PathPrefix(`/static/`) || PathPrefix(`/media/`))
+      - traefik.http.routers.fotoflash-files.priority=100
+      - traefik.http.routers.fotoflash-files.entrypoints=websecure
+      - traefik.http.routers.fotoflash-files.tls.certresolver=le
+      - traefik.http.services.fotoflash-files.loadbalancer.server.port=80
+
+volumes:
+  media:
+  static:
+  redis:
+
+networks:
+  proxy:
+    external: true
+  db:
+    external: true

@@ -324,7 +324,7 @@ def test_provider_choice_is_stored_per_payment(bank, booking):
 
 def test_dev_simulate_endpoint_confirms_own_fake_payment(client_user, location, settings):
     settings.PAYMENT_PROVIDER = "fake"
-    settings.DEBUG = True
+    settings.PAYMENT_SIMULATION = True
     booking = booking_services.create_booking(user=client_user, location=location, starts_at=at(10), ends_at=at(12), now=NOW)
     payment = services.start_payment(booking, now=NOW)
 
@@ -347,14 +347,14 @@ def test_dev_simulate_endpoint_is_hidden_outside_debug(client_user, location, se
     payment = services.start_payment(booking, now=NOW)
     api = APIClient()
     api.force_authenticate(client_user)
-    settings.DEBUG = False
+    settings.PAYMENT_SIMULATION = False
     assert api.post(f"/api/v1/dev/payments/{payment.pk}/simulate/", {}, format="json").status_code == 404
 
 
 def test_simulate_payment_rejects_non_object_body(db, settings, client_user):
     from rest_framework.test import APIClient
 
-    settings.DEBUG = True
+    settings.PAYMENT_SIMULATION = True
     api = APIClient()
     api.force_authenticate(client_user)
 

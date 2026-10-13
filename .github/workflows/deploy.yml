@@ -1,0 +1,124 @@
+name: Deploy
+
+# Деплой только после зелёного CI на main
+on:
+  workflow_run:
+    workflows: [CI]
+    branches: [main]
+    types: [completed]
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+env:
+  APP_DIR: /opt/apps/fotoflash-backend
+  DOMAIN: fotoflash.zagoruykov.site
+
+jobs:
+  build:
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.meta.outputs.image }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Image name
+        id: meta
+        run: echo "image=ghcr.io/${GITHUB_REPOSITORY,,}:${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: prod
+          push: true
+          tags: ${{ steps.meta.outputs.image }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Setup SSH
+        env:
+          KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+      # Значения стенда лежат здесь, секреты берутся из GitHub secrets репозитория.
+      # Список ключей должен совпадать с .env.example (новую переменную добавлять и туда).
+      - name: Render .env
+        env:
+          IMAGE: ${{ needs.build.outputs.image }}
+          SECRET_KEY: ${{ secrets.FOTOFLASH_SECRET_KEY }}
+          DB_PASSWORD: ${{ secrets.FOTOFLASH_DB_PASSWORD }}
+        run: |
+          umask 077
+          cat > .env.deploy <<ENV
+          IMAGE=$IMAGE
+          SECRET_KEY=$SECRET_KEY
+          DEBUG=False
+          ALLOWED_HOSTS=$DOMAIN,localhost
+          CSRF_TRUSTED_ORIGINS=https://$DOMAIN
+          DATABASE_URL=postgres://fotoflash:$DB_PASSWORD@postgres:5432/fotoflash
+          REDIS_URL=redis://redis:6379/0
+          EMAIL_BACKEND=django.core.mail.backends.console.EmailBackend
+          PAYMENT_PROVIDER=fake
+          PAYMENT_SIMULATION=True
+          FRONTEND_URL=https://$DOMAIN
+          ENV
+
+      - name: Ensure database
+        env:
+          HOST: ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}
+          DB_PASSWORD: ${{ secrets.FOTOFLASH_DB_PASSWORD }}
+        run: |
+          ssh "$HOST" "cd /opt/postgres && docker compose exec -T postgres psql -U postgres -v ON_ERROR_STOP=1" <<SQL
+          DO \$\$ BEGIN
+            IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'fotoflash') THEN
+              CREATE ROLE fotoflash LOGIN PASSWORD '$DB_PASSWORD';
+            ELSE
+              ALTER ROLE fotoflash PASSWORD '$DB_PASSWORD';
+            END IF;
+          END \$\$;
+          SELECT 'CREATE DATABASE fotoflash OWNER fotoflash' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'fotoflash')\gexec
+          SQL
+
+      - name: Deploy
+        env:
+          HOST: ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ssh "$HOST" "mkdir -p $APP_DIR"
+          scp docker-compose.prod.yml "$HOST:$APP_DIR/docker-compose.yml"
+          scp deploy/nginx.conf "$HOST:$APP_DIR/nginx.conf"
+          scp .env.deploy "$HOST:$APP_DIR/.env"
+          echo "$GHCR_TOKEN" | ssh "$HOST" "docker login ghcr.io -u $GHCR_USER --password-stdin"
+          ssh "$HOST" "cd $APP_DIR && chmod 600 .env && docker compose pull && docker compose up -d --remove-orphans && docker image prune -f"

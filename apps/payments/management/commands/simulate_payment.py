@@ -13,8 +13,8 @@ class Command(BaseCommand):
         parser.add_argument("--status", default="CONFIRMED", choices=["CONFIRMED", "REJECTED", "CANCELED"])
 
     def handle(self, *args, payment_id, status, **opts):
-        if not settings.DEBUG:
-            raise CommandError("Только при DEBUG=True.")
+        if not settings.PAYMENT_SIMULATION:
+            raise CommandError("Только при PAYMENT_SIMULATION=True (по умолчанию DEBUG).")
         payment = Payment.objects.filter(pk=payment_id, provider=Payment.Provider.FAKE).first()
         if payment is None:
             raise CommandError("Тестовый платёж не найден.")

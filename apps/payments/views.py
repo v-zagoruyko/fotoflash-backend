@@ -34,12 +34,12 @@ class TBankNotificationView(APIView):
 
 
 class SimulatePaymentView(APIView):
-    """Только для DEBUG: имитация ответа банка для тестового платежа своей брони."""
+    """Только при PAYMENT_SIMULATION (по умолчанию DEBUG): имитация ответа банка для тестового платежа своей брони."""
 
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
-        exclude=not settings.DEBUG,
+        exclude=not settings.PAYMENT_SIMULATION,
         request=inline_serializer(
             "SimulatePayment", {"status": serializers.ChoiceField(["CONFIRMED", "REJECTED", "CANCELED"], default="CONFIRMED")}
         ),
@@ -48,7 +48,7 @@ class SimulatePaymentView(APIView):
         ),
     )
     def post(self, request, payment_id: int):
-        if not settings.DEBUG:
+        if not settings.PAYMENT_SIMULATION:
             raise Http404
         payment = get_object_or_404(
             Payment.objects.select_related("booking"), pk=payment_id, booking__user=request.user, provider=Payment.Provider.FAKE

@@ -143,6 +143,8 @@ if not DEBUG:
 
 # --- Платежи -------------------------------------------------------------------------------------
 PAYMENT_PROVIDER = env("PAYMENT_PROVIDER", default="fake")  # tbank | fake — провайдер для новых платежей
+# Эндпоинт и команда имитации банка для платежей `fake`; на тестовом стенде включаем при DEBUG=False
+PAYMENT_SIMULATION = env.bool("PAYMENT_SIMULATION", default=DEBUG)
 FRONTEND_URL = env("FRONTEND_URL", default="http://localhost:3000")
 TBANK_API_URL = env("TBANK_API_URL", default="https://securepay.tbank.ru/v2")
 TBANK_TERMINAL_KEY = env("TBANK_TERMINAL_KEY", default="")
