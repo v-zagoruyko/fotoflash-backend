@@ -1,0 +1,12 @@
+{% if user_name %}{{ user_name }}, напоминаем{% else %}Напоминаем{% endif %}: {{ starts|date:"l, j E" }} в {{ starts|date:"H:i" }} вас ждут в студии.
+
+Бронь №{{ booking.pk }}
+Зал: {{ booking.location.title }}
+Время: {{ starts|date:"H:i" }} – {{ ends|date:"H:i" }} ({{ hours }} ч)
+{% if cancel_deadline %}
+Бесплатно отменить бронь можно до {{ cancel_deadline|date:"j E, H:i" }}.
+{% endif %}
+Бронь на сайте: {{ url }}
+{% if studio.address %}Адрес: {{ studio.address }}
+{% endif %}{% if studio.contact_phone %}Телефон: {{ studio.contact_phone }}
+{% endif %}

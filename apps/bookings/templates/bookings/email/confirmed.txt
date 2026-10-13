@@ -1,0 +1,18 @@
+{% if user_name %}{{ user_name }}, ждём{% else %}Ждём{% endif %} вас в студии. Оплата получена, бронь закреплена за вами.
+
+Бронь №{{ booking.pk }}
+Зал: {{ booking.location.title }}
+Дата: {{ starts|date:"l, j E Y" }}
+Время: {{ starts|date:"H:i" }} – {{ ends|date:"H:i" }} ({{ hours }} ч)
+{% for line in extras %}Дополнительно: {{ line.extra.title }}, {{ line.hours }} ч
+{% endfor %}Стоимость: {{ booking.subtotal|floatformat:"-2" }} ₽{% if booking.bonus_spent %}, оплачено баллами: {{ booking.bonus_spent }}{% endif %}
+{% if cashback %}
+За эту бронь начислено {{ cashback }} баллов.
+{% endif %}{% if has_rules %}
+Правила студии во вложении.
+{% endif %}{% if cancel_deadline %}Бесплатно отменить бронь можно до {{ cancel_deadline|date:"j E, H:i" }}.
+{% endif %}
+Бронь на сайте: {{ url }}
+{% if studio.address %}Адрес: {{ studio.address }}
+{% endif %}{% if studio.contact_phone %}Телефон: {{ studio.contact_phone }}
+{% endif %}

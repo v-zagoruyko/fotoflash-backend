@@ -1,0 +1,10 @@
+{% extends "bookings/email/_base.html" %}
+{% block title %}Бронь отменена{% endblock %}
+{% block body %}
+  <p style="margin:0 0 12px;">Бронь №{{ booking.pk }} отменена.</p>
+  {% if refunded_online %}<p style="margin:0 0 12px;">Деньги вернутся на карту, с которой была оплата. Обычно это занимает до нескольких рабочих дней.</p>{% endif %}
+  {% if bonus_returned %}<p style="margin:0;">Потраченные баллы ({{ bonus_returned }}) возвращены на ваш счёт.</p>{% endif %}
+{% endblock %}
+{% block after %}
+  <p style="margin:0;">Если отмена была не по вашей инициативе или остались вопросы, ответьте на это письмо или позвоните нам.</p>
+{% endblock %}

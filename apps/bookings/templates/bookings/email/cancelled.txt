@@ -1,0 +1,11 @@
+Бронь №{{ booking.pk }} отменена.
+
+Зал: {{ booking.location.title }}
+Время: {{ starts|date:"j E Y, H:i" }} – {{ ends|date:"H:i" }}
+{% if refunded_online %}
+Деньги вернутся на карту, с которой была оплата, обычно в течение нескольких рабочих дней.
+{% endif %}{% if bonus_returned %}Потраченные баллы ({{ bonus_returned }}) возвращены на ваш счёт.
+{% endif %}
+Если остались вопросы, ответьте на это письмо.
+{% if studio.contact_phone %}Телефон: {{ studio.contact_phone }}
+{% endif %}

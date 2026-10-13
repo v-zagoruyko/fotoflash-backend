@@ -1,0 +1,16 @@
+{% extends "admin/change_form.html" %}
+
+{% block submit_buttons_bottom %}
+  {{ block.super }}
+  {% if original and has_change_permission %}
+    {% if original.status == "pending" or original.status == "confirmed" %}
+      <div class="submit-row">
+        {% if original.status == "pending" %}
+          <input type="submit" name="_confirm_manually" value="Сохранить и подтвердить оплату">
+        {% endif %}
+        <input type="submit" name="_cancel_booking" value="Сохранить и отменить бронь"
+               onclick="return confirm('Отменить бронь №{{ original.pk }}? Баллы вернутся клиенту, кешбэк будет снят.');">
+      </div>
+    {% endif %}
+  {% endif %}
+{% endblock %}

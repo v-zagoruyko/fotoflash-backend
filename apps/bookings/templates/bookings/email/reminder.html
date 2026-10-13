@@ -1,0 +1,9 @@
+{% extends "bookings/email/_base.html" %}
+{% block title %}Напоминание о брони{% endblock %}
+{% block body %}
+  <p style="margin:0;">{% if user_name %}{{ user_name }}, напоминаем{% else %}Напоминаем{% endif %}: {{ starts|date:"l, j E" }} в {{ starts|date:"H:i" }} вас ждут в студии.</p>
+{% endblock %}
+{% block after %}
+  {% if cancel_deadline %}<p style="margin:0 0 8px;">Бесплатно отменить бронь можно до {{ cancel_deadline|date:"j E, H:i" }}.</p>{% endif %}
+  <p style="margin:0;"><a href="{{ url }}" style="color:#1c1c1c;">Открыть бронь на сайте</a></p>
+{% endblock %}

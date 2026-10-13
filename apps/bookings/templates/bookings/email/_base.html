@@ -1,0 +1,31 @@
+{% load l10n %}<!doctype html>
+<html lang="ru">
+<body style="margin:0;padding:24px 12px;background:#f4f4f2;font-family:Arial,Helvetica,sans-serif;color:#1c1c1c;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:8px;">
+    <tr><td style="padding:28px 28px 8px;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:#777;">Fotoflash Studio</td></tr>
+    <tr><td style="padding:0 28px 8px;font-size:22px;font-weight:bold;">{% block title %}{% endblock %}</td></tr>
+    <tr><td style="padding:8px 28px 20px;font-size:15px;line-height:1.5;">
+      {% block body %}{% endblock %}
+    </td></tr>
+    {% block details %}
+    <tr><td style="padding:0 28px 20px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e5e0;border-radius:6px;font-size:14px;">
+        <tr><td style="padding:10px 14px;color:#777;width:38%;">Бронь</td><td style="padding:10px 14px;">№{{ booking.pk }}</td></tr>
+        <tr><td style="padding:10px 14px;color:#777;">Зал</td><td style="padding:10px 14px;">{{ booking.location.title }}</td></tr>
+        <tr><td style="padding:10px 14px;color:#777;">Дата</td><td style="padding:10px 14px;">{{ starts|date:"l, j E Y" }}</td></tr>
+        <tr><td style="padding:10px 14px;color:#777;">Время</td><td style="padding:10px 14px;">{{ starts|date:"H:i" }} – {{ ends|date:"H:i" }} ({{ hours }} ч)</td></tr>
+        {% for line in extras %}
+        <tr><td style="padding:10px 14px;color:#777;">{% if forloop.first %}Дополнительно{% endif %}</td><td style="padding:10px 14px;">{{ line.extra.title }}, {{ line.hours }} ч</td></tr>
+        {% endfor %}
+        <tr><td style="padding:10px 14px;color:#777;">Стоимость</td><td style="padding:10px 14px;">{{ booking.subtotal|floatformat:"-2" }} ₽{% if booking.bonus_spent %}, оплачено баллами: {{ booking.bonus_spent }}{% endif %}</td></tr>
+      </table>
+    </td></tr>
+    {% endblock %}
+    <tr><td style="padding:0 28px 28px;font-size:14px;line-height:1.5;color:#444;">
+      {% block after %}{% endblock %}
+      {% if studio.address %}<p style="margin:12px 0 0;">Адрес: {{ studio.address }}</p>{% endif %}
+      {% if studio.contact_phone %}<p style="margin:4px 0 0;">Телефон: {{ studio.contact_phone }}</p>{% endif %}
+    </td></tr>
+  </table>
+</body>
+</html>

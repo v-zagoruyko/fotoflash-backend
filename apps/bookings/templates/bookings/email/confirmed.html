@@ -1,0 +1,11 @@
+{% extends "bookings/email/_base.html" %}
+{% block title %}Бронь подтверждена{% endblock %}
+{% block body %}
+  <p style="margin:0 0 12px;">{% if user_name %}{{ user_name }}, ждём{% else %}Ждём{% endif %} вас в студии. Оплата получена, бронь закреплена за вами.</p>
+  {% if cashback %}<p style="margin:0;">За эту бронь начислено <b>{{ cashback }} баллов</b>, их можно потратить на следующую бронь.</p>{% endif %}
+{% endblock %}
+{% block after %}
+  {% if has_rules %}<p style="margin:0 0 8px;">Правила студии во вложении. Пожалуйста, ознакомьтесь с ними до визита.</p>{% endif %}
+  {% if cancel_deadline %}<p style="margin:0 0 8px;">Бесплатно отменить бронь можно до {{ cancel_deadline|date:"j E, H:i" }}.</p>{% endif %}
+  <p style="margin:0;"><a href="{{ url }}" style="color:#1c1c1c;">Открыть бронь на сайте</a></p>
+{% endblock %}
