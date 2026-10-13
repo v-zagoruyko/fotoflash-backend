@@ -1,8 +1,9 @@
 from adminsortable2.admin import SortableAdminMixin, SortableTabularInline
 from django.contrib import admin
+from django.db.models import Count
 from django.utils.html import format_html
 
-from .models import Extra, Location, LocationImage
+from .models import Extra, ExtraCategory, Location, LocationImage
 
 
 def thumbnail(image, size=56):
@@ -60,12 +61,25 @@ class LocationAdmin(SortableAdminMixin, admin.ModelAdmin):
         return thumbnail(obj.cover)
 
 
+@admin.register(ExtraCategory)
+class ExtraCategoryAdmin(SortableAdminMixin, admin.ModelAdmin):
+    list_display = ("title", "extras_count")
+    search_fields = ("title",)
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).annotate(extras_total=Count("extras"))
+
+    @admin.display(description="Позиций", ordering="extras_total")
+    def extras_count(self, obj):
+        return obj.extras_total
+
+
 @admin.register(Extra)
 class ExtraAdmin(SortableAdminMixin, admin.ModelAdmin):
-    list_display = ("cover_preview", "title", "hour_price", "quantity", "is_active")
+    list_display = ("cover_preview", "title", "category", "hour_price", "quantity", "is_active")
     list_display_links = ("cover_preview", "title")
-    list_editable = ("hour_price", "is_active")
-    list_filter = ("is_active",)
+    list_editable = ("category", "hour_price", "is_active")
+    list_filter = ("category", "is_active")
     search_fields = ("title",)
 
     @admin.display(description="Фото")

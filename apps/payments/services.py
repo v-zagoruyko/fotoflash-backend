@@ -201,3 +201,14 @@ def reconcile_payments(*, now: datetime | None = None) -> dict:
     for payment in orphaned:
         refunded += refund_payment(payment)
     return {"checked": checked, "refunded": refunded}
+
+
+def simulate_fake_payment(payment: Payment, status: str) -> Payment:
+    """Dev: имитирует ответ банка для тестового платежа (provider=fake)."""
+    if payment.provider != Payment.Provider.FAKE:
+        raise PaymentProviderError("Имитировать можно только тестовый платёж.")
+    payment.raw = {**payment.raw, "fake_status": status}
+    payment.save(update_fields=["raw"])
+    payment = apply_status(payment, status)
+    payment.booking.refresh_from_db()
+    return payment

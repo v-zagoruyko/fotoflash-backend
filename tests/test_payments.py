@@ -320,3 +320,44 @@ def test_provider_choice_is_stored_per_payment(bank, booking):
     assert payment.provider == "tbank"
     assert isinstance(ProviderPayment("1", "u", "NEW"), ProviderPayment)
     json.dumps(payment.raw)  # сырой ответ банка сериализуем
+
+
+def test_dev_simulate_endpoint_confirms_own_fake_payment(client_user, location, settings):
+    settings.PAYMENT_PROVIDER = "fake"
+    settings.DEBUG = True
+    booking = booking_services.create_booking(user=client_user, location=location, starts_at=at(10), ends_at=at(12), now=NOW)
+    payment = services.start_payment(booking, now=NOW)
+
+    from apps.users.models import User
+
+    api = APIClient()
+    other = User.objects.create_user("other@example.com")
+    api.force_authenticate(other)
+    assert api.post(f"/api/v1/dev/payments/{payment.pk}/simulate/", {}, format="json").status_code == 404
+
+    api.force_authenticate(client_user)
+    response = api.post(f"/api/v1/dev/payments/{payment.pk}/simulate/", {"status": "CONFIRMED"}, format="json")
+    assert response.status_code == 200, response.content
+    assert response.json() == {"payment_status": "confirmed", "booking_status": "confirmed"}
+
+
+def test_dev_simulate_endpoint_is_hidden_outside_debug(client_user, location, settings):
+    settings.PAYMENT_PROVIDER = "fake"
+    booking = booking_services.create_booking(user=client_user, location=location, starts_at=at(10), ends_at=at(12), now=NOW)
+    payment = services.start_payment(booking, now=NOW)
+    api = APIClient()
+    api.force_authenticate(client_user)
+    settings.DEBUG = False
+    assert api.post(f"/api/v1/dev/payments/{payment.pk}/simulate/", {}, format="json").status_code == 404
+
+
+def test_simulate_payment_rejects_non_object_body(db, settings, client_user):
+    from rest_framework.test import APIClient
+
+    settings.DEBUG = True
+    api = APIClient()
+    api.force_authenticate(client_user)
+
+    response = api.post("/api/v1/dev/payments/1/simulate/", ["CONFIRMED"], format="json")
+
+    assert response.status_code == 404  # чужого/несуществующего платежа нет, 500 быть не должно

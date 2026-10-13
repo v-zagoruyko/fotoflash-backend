@@ -24,6 +24,7 @@ from .exceptions import (
     CancellationNotAllowed,
     ExtraUnavailable,
     InvalidBookingState,
+    InvalidTimeRange,
     LocationUnavailable,
     SlotUnavailable,
 )
@@ -113,6 +114,41 @@ def get_day_slots(location: Location, day: date, *, now: datetime | None = None)
     return slots
 
 
+def get_free_hours_by_day(location: Location, start: date, days: int, *, now: datetime | None = None) -> list[dict]:
+    """Число свободных часов зала по дням, одним запросом на весь диапазон."""
+    now = now or timezone.now()
+    windows = [(day, *working_window(location, day)) for day in (start + timedelta(days=i) for i in range(days))]
+    busy = list(
+        Booking.objects.filter(
+            location_id__in=_location_group_ids(location),
+            starts_at__lt=max(closes for _, _, closes in windows),
+            ends_at__gt=min(opens for _, opens, _ in windows),
+        )
+        .filter(_blocking_q(now))
+        .values_list("starts_at", "ends_at")
+    )
+    last_day = _last_bookable_day(now, StudioSettings.load())
+    result = []
+    for day, opens, closes in windows:
+        free = 0
+        if day <= last_day:
+            day_busy = [(s, e) for s, e in busy if s < closes and e > opens]
+            for hour in iter_hours(opens, closes):
+                if hour >= now and not any(s < hour + HOUR and e > hour for s, e in day_busy):
+                    free += 1
+        result.append({"date": day, "free_hours": free})
+    return result
+
+
+def _last_bookable_day(now: datetime, settings: StudioSettings) -> date:
+    return timezone.localtime(now).date() + timedelta(days=settings.booking_horizon_days)
+
+
+def _assert_within_horizon(starts_at: datetime, now: datetime, settings: StudioSettings) -> None:
+    if timezone.localtime(starts_at).date() > _last_bookable_day(now, settings):
+        raise InvalidTimeRange(f"Бронировать можно не более чем на {settings.booking_horizon_days} дн. вперёд.")
+
+
 def _resolve_extras(orders: Sequence[ExtraOrder], duration: int, *, lock: bool) -> list[tuple[Extra, int]]:
     ids = [o.extra_id for o in orders]
     if len(set(ids)) != len(ids):
@@ -168,10 +204,13 @@ def _build_quote(
     now: datetime,
     lock: bool,
     allow_past: bool = False,
+    settings: StudioSettings | None = None,
 ) -> BookingQuote:
     if not location.is_active:
         raise LocationUnavailable("Зал сейчас недоступен для бронирования.")
     hours = validate_window(location, starts_at, ends_at, now, allow_past=allow_past)
+    if not allow_past:
+        _assert_within_horizon(starts_at, now, settings or StudioSettings.load())
     resolved = _resolve_extras(extras, hours, lock=lock)
     _assert_slot_free(_location_group_ids(location), starts_at, ends_at, now)
     _assert_extras_in_stock(resolved, starts_at, ends_at, now)
@@ -254,6 +293,7 @@ def create_booking(
                 now=now,
                 lock=True,
                 allow_past=allow_past,
+                settings=settings,
             )
             booking = Booking.objects.create(
                 user=locked_user,

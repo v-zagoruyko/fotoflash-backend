@@ -107,8 +107,30 @@ class LocationImage(models.Model):
         return f"{self.location}: фото {self.pk}"
 
 
+class ExtraCategory(models.Model):
+    title = models.CharField("Название", max_length=64)
+    sort = models.PositiveIntegerField("Порядок", default=0, editable=False, db_index=True)
+
+    class Meta:
+        verbose_name = "категория оборудования и услуг"
+        verbose_name_plural = "категории оборудования и услуг"
+        ordering = ("sort", "title")
+
+    def __str__(self):
+        return self.title
+
+
 class Extra(models.Model):
     title = models.CharField("Название", max_length=128)
+    category = models.ForeignKey(
+        ExtraCategory,
+        verbose_name="Категория",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="extras",
+        help_text="Группа на шаге допов при бронировании. Без категории позиция показывается в конце списка.",
+    )
     description = models.TextField("Описание", blank=True)
     cover = OptimizedImageField("Фото", upload_to="extras/", max_side=1000, null=True, blank=True)
     hour_price = models.DecimalField("Цена за час, ₽", max_digits=8, decimal_places=2)

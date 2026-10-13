@@ -6,8 +6,8 @@ from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
 from apps.core.views import healthz
 
-admin.site.site_header = "Fotoflash — администрирование"
-admin.site.site_title = "Fotoflash"
+admin.site.site_header = "ФОТОФЛЕШ — администрирование"
+admin.site.site_title = "ФОТОФЛЕШ"
 admin.site.index_title = "Управление студией"
 
 urlpatterns = [

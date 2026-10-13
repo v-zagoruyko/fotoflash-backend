@@ -44,3 +44,31 @@ def test_admin_change_pages_render(admin_client, client_user, location):
 
 def test_healthz(client, db):
     assert client.get("/healthz").json() == {"status": "ok"}
+
+
+def test_studio_contacts_are_public(db, client):
+    StudioSettings.objects.filter(pk=1).delete()
+    studio = StudioSettings.load()
+    studio.address = "г. Тюмень, ул. Зоологическая, 31"
+    studio.contact_phone = "+7 922 267-00-55"
+    studio.contact_email = "info@fotoflash.studio"
+    studio.map_url = "https://yandex.ru/maps/-/CLabc"
+    studio.legal_name = "ИП Иванов Иван Иванович"
+    studio.inn = "720000000000"
+    studio.legal_address = "625000, г. Тюмень, ул. Тестовая, д. 1"
+    studio.save()
+
+    response = client.get("/api/v1/studio/")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "address": "г. Тюмень, ул. Зоологическая, 31",
+        "phone": "+7 922 267-00-55",
+        "email": "info@fotoflash.studio",
+        "map_url": "https://yandex.ru/maps/-/CLabc",
+        "booking_horizon_days": 92,
+        "legal_name": "ИП Иванов Иван Иванович",
+        "inn": "720000000000",
+        "ogrnip": "",
+        "legal_address": "625000, г. Тюмень, ул. Тестовая, д. 1",
+    }

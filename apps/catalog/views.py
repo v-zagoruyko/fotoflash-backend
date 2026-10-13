@@ -1,6 +1,7 @@
 from datetime import timedelta
 
-from drf_spectacular.utils import extend_schema
+from django.db.models import F
+from drf_spectacular.utils import PolymorphicProxySerializer, extend_schema
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny
@@ -12,6 +13,7 @@ from .models import Extra, Location
 from .serializers import (
     AvailabilityQuerySerializer,
     DayAvailabilitySerializer,
+    DaySummarySerializer,
     ExtraSerializer,
     LocationSerializer,
 )
@@ -28,9 +30,15 @@ class LocationViewSet(viewsets.ReadOnlyModelViewSet):
 
     @extend_schema(
         parameters=[AvailabilityQuerySerializer],
-        responses=DayAvailabilitySerializer(many=True),
+        responses=PolymorphicProxySerializer(
+            component_name="Availability",
+            serializers=[DayAvailabilitySerializer, DaySummarySerializer],
+            resource_type_field_name=None,
+            many=True,
+        ),
         description=(
-            "Почасовые слоты зала с признаком доступности и ценой часа. Учитывает смежные залы и неоплаченные брони с живым холдом."
+            "Почасовые слоты зала с признаком доступности и ценой часа. Учитывает смежные залы и неоплаченные брони с живым холдом. "
+            "С `summary=1` вместо слотов отдаёт `[{date, free_hours}]` и допускает до 93 дней."
         ),
     )
     @action(detail=True, methods=["get"])
@@ -39,6 +47,9 @@ class LocationViewSet(viewsets.ReadOnlyModelViewSet):
         params.is_valid(raise_exception=True)
         location = self.get_object()
         start = params.validated_data["date"]
+        if params.validated_data["summary"]:
+            summary = services.get_free_hours_by_day(location, start, params.validated_data["days"])
+            return Response(DaySummarySerializer(summary, many=True).data)
         days = [
             {"date": day, "slots": services.get_day_slots(location, day)}
             for day in (start + timedelta(days=i) for i in range(params.validated_data["days"]))
@@ -49,5 +60,9 @@ class LocationViewSet(viewsets.ReadOnlyModelViewSet):
 class ExtraViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [AllowAny]
     serializer_class = ExtraSerializer
-    queryset = Extra.objects.filter(is_active=True)
+    queryset = (
+        Extra.objects.filter(is_active=True)
+        .select_related("category")
+        .order_by(F("category__sort").asc(nulls_last=True), "category_id", "sort", "title")
+    )
     pagination_class = None

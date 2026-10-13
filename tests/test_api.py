@@ -9,7 +9,8 @@ from rest_framework.test import APIClient
 from apps.bonuses.models import BonusTransaction
 from apps.bookings import services
 from apps.bookings.models import Booking
-from apps.catalog.models import Extra
+from apps.catalog.models import Extra, ExtraCategory
+from apps.core.models import StudioSettings
 from apps.documents.models import Document
 from apps.users.models import User
 
@@ -269,3 +270,87 @@ def test_late_cancellation_of_confirmed_booking_is_rejected(logged, client_user,
 def test_openapi_schema_builds(api):
     response = api.get("/api/schema/")
     assert response.status_code == 200
+
+
+# --- категории допов, сводка доступности, горизонт ---------------------------------------------
+
+
+def test_extras_are_grouped_by_category_order(api, db):
+    light = ExtraCategory.objects.create(title="Свет", sort=2)
+    services_cat = ExtraCategory.objects.create(title="Услуги", sort=1)
+    Extra.objects.create(title="Без категории", hour_price=10, sort=0)
+    Extra.objects.create(title="Лампа", hour_price=10, category=light, sort=1)
+    Extra.objects.create(title="Ассистент", hour_price=10, category=services_cat, sort=5)
+    Extra.objects.create(title="Визажист", hour_price=10, category=services_cat, sort=3)
+
+    items = api.get(f"{API}/extras/").json()
+
+    assert [e["title"] for e in items] == ["Визажист", "Ассистент", "Лампа", "Без категории"]
+    assert items[0]["category"] == {"id": services_cat.pk, "title": "Услуги"}
+    assert items[-1]["category"] is None
+
+
+def test_availability_summary_returns_free_hours(api, location, client_user):
+    payload = booking_payload(location)
+    start = datetime.fromisoformat(payload["starts_at"])
+    services.create_booking(
+        user=client_user,
+        location=location,
+        starts_at=start,
+        ends_at=datetime.fromisoformat(payload["ends_at"]),
+    )
+    day = start.date().isoformat()
+
+    summary = api.get(f"{API}/locations/loft/availability/", {"date": day, "days": 3, "summary": 1}).json()
+    full = api.get(f"{API}/locations/loft/availability/", {"date": day, "days": 3}).json()
+
+    assert [d["date"] for d in summary] == [d["date"] for d in full]
+    assert summary[0].keys() == {"date", "free_hours"}
+    assert [d["free_hours"] for d in summary] == [sum(s["is_available"] for s in d["slots"]) for d in full]
+    assert summary[0]["free_hours"] < summary[1]["free_hours"]
+
+
+def test_availability_days_limit(api, location):
+    day = datetime.now().date().isoformat()
+    base = f"{API}/locations/loft/availability/"
+
+    assert api.get(base, {"date": day, "days": 15}).status_code == 400
+    assert api.get(base, {"date": day, "days": 93, "summary": 1}).status_code == 200
+    assert api.get(base, {"date": day, "days": 94, "summary": 1}).status_code == 400
+
+
+def test_booking_horizon_is_enforced_and_public(api, location):
+    from django.utils import timezone
+
+    studio = StudioSettings.load()
+    studio.booking_horizon_days = 10
+    studio.save()
+    assert api.get(f"{API}/studio/").json()["booking_horizon_days"] == 10
+
+    now = timezone.now()
+    day = timezone.localtime(now).replace(hour=12, minute=0, second=0, microsecond=0)
+
+    def quote(days):
+        start = day + timedelta(days=days)
+        return api.post(
+            f"{API}/bookings/quote/",
+            {"location": "loft", "starts_at": start.isoformat(), "ends_at": (start + timedelta(hours=1)).isoformat()},
+            format="json",
+        )
+
+    assert quote(10).status_code == 200
+    response = quote(11)
+    assert response.status_code == 400
+    assert response.json()["code"] == "invalid_time_range"
+
+
+def test_availability_summary_respects_horizon(api, location):
+    studio = StudioSettings.load()
+    studio.booking_horizon_days = 3
+    studio.save()
+    day = datetime.now(TZ).date().isoformat()
+
+    summary = api.get(f"{API}/locations/loft/availability/", {"date": day, "days": 6, "summary": 1}).json()
+
+    assert [d["free_hours"] > 0 for d in summary][1:4] == [True, True, True]
+    assert [d["free_hours"] for d in summary][4:] == [0, 0]

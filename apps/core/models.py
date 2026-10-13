@@ -1,3 +1,4 @@
+from django.core.validators import MinValueValidator
 from django.db import models
 
 
@@ -6,6 +7,12 @@ class StudioSettings(models.Model):
         "Время на оплату, мин",
         default=30,
         help_text="Сколько минут слот удерживается за неоплаченной бронью. По истечении бронь отменяется автоматически.",
+    )
+    booking_horizon_days = models.PositiveSmallIntegerField(
+        "Горизонт бронирования, дн.",
+        default=92,
+        validators=[MinValueValidator(1)],
+        help_text="На сколько дней вперёд клиент может забронировать время. Календарь на сайте заканчивается на этой дате.",
     )
     cancel_before_hours = models.PositiveSmallIntegerField(
         "Отмена клиентом: не позднее чем за, ч",
@@ -40,13 +47,38 @@ class StudioSettings(models.Model):
         "Адрес студии",
         max_length=255,
         blank=True,
-        help_text="Показывается в письмах клиентам: как добраться.",
+        help_text="Показывается в письмах клиентам и на сайте.",
     )
     contact_phone = models.CharField(
         "Телефон студии",
         max_length=32,
         blank=True,
-        help_text="Показывается в письмах клиентам.",
+        help_text="Показывается в письмах клиентам и на сайте.",
+    )
+    contact_email = models.EmailField(
+        "Почта студии",
+        blank=True,
+        help_text="Публичная почта для связи, показывается на сайте.",
+    )
+    map_url = models.URLField(
+        "Ссылка на карту",
+        blank=True,
+        help_text="Ссылка на студию на карте (Яндекс Карты, 2ГИС), кнопка «Открыть на карте» на сайте.",
+    )
+
+    legal_name = models.CharField(
+        "Исполнитель",
+        max_length=255,
+        blank=True,
+        help_text="Для ИП: «ИП Фамилия Имя Отчество». Выводится в футере сайта.",
+    )
+    inn = models.CharField("ИНН", max_length=12, blank=True)
+    ogrnip = models.CharField("ОГРНИП", max_length=15, blank=True, help_text="Для ИП. Для организации оставьте пустым.")
+    legal_address = models.CharField(
+        "Юридический адрес",
+        max_length=255,
+        blank=True,
+        help_text="Место нахождения исполнителя, как в ЕГРИП.",
     )
 
     class Meta:
