@@ -99,7 +99,8 @@ jobs:
           HOST: ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}
           DB_PASSWORD: ${{ secrets.FOTOFLASH_DB_PASSWORD }}
         run: |
-          ssh "$HOST" "cd /opt/postgres && docker compose exec -T postgres psql -U postgres -v ON_ERROR_STOP=1" <<SQL
+          # deploy не имеет доступа в /opt/postgres, поэтому контейнер ищем по labels compose
+          ssh "$HOST" "docker exec -i \$(docker ps -q --filter label=com.docker.compose.project=postgres --filter label=com.docker.compose.service=postgres) psql -U postgres -v ON_ERROR_STOP=1" <<SQL
           DO \$\$ BEGIN
             IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'fotoflash') THEN
               CREATE ROLE fotoflash LOGIN PASSWORD '$DB_PASSWORD';
